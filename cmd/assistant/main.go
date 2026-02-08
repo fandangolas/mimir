@@ -7,12 +7,12 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/fandangolas/personal-assistant/internal/config"
-	"github.com/fandangolas/personal-assistant/internal/llm/ollama"
-	"github.com/fandangolas/personal-assistant/internal/observability"
-	"github.com/fandangolas/personal-assistant/internal/orchestrator"
-	"github.com/fandangolas/personal-assistant/internal/store"
-	"github.com/fandangolas/personal-assistant/internal/telegram"
+	"github.com/fandangolas/mimir/internal/config"
+	"github.com/fandangolas/mimir/internal/llm/ollama"
+	"github.com/fandangolas/mimir/internal/observability"
+	"github.com/fandangolas/mimir/internal/orchestrator"
+	"github.com/fandangolas/mimir/internal/store"
+	"github.com/fandangolas/mimir/internal/telegram"
 )
 
 func main() {

@@ -8,7 +8,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
-	"github.com/fandangolas/personal-assistant/internal/observability"
+	"github.com/fandangolas/mimir/internal/observability"
 )
 
 // IncomingMessage is a simplified representation of a Telegram message

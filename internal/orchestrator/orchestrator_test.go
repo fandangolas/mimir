@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/fandangolas/personal-assistant/internal/llm"
-	"github.com/fandangolas/personal-assistant/internal/store"
+	"github.com/fandangolas/mimir/internal/llm"
+	"github.com/fandangolas/mimir/internal/store"
 )
 
 // mockChat is a test double for llm.ChatProvider.

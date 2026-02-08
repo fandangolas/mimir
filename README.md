@@ -1,7 +1,7 @@
-# Personal Assistant
+# Mimir
 
 <p align="center">
-  <em>A local-first, privacy-focused AI assistant powered by Telegram and Ollama</em>
+  <em>Your personal Mimir — knowledge, wisdom, and conversation. All local, all private.</em>
 </p>
 
 <p align="center">
@@ -14,7 +14,7 @@
 
 ## Overview
 
-Personal Assistant is a **privacy-first conversational AI** that runs entirely on your machine. Chat with it via Telegram, powered by local LLMs (Ollama), with full conversation history, observability, and zero external data sharing.
+Mimir is a **privacy-first conversational AI** that runs entirely on your machine. Chat with it via Telegram, powered by local LLMs (Ollama), with full conversation history, observability, and zero external data sharing.
 
 **Key Features:**
 - 🔒 **100% Local** — No data sent to external LLM providers
@@ -36,7 +36,7 @@ Personal Assistant is a **privacy-first conversational AI** that runs entirely o
          │ Long Polling (HTTPS)
          ↓
 ┌────────────────────────────────┐
-│   Personal Assistant (Go)      │
+│   Mimir (Go)      │
 │  ┌──────────────────────────┐  │
 │  │ Telegram Poller          │  │
 │  │ Orchestrator             │  │
@@ -84,8 +84,8 @@ Personal Assistant is a **privacy-first conversational AI** that runs entirely o
 ### 1. Clone and Configure
 
 ```bash
-git clone https://github.com/fandangolas/personal-assistant.git
-cd personal-assistant
+git clone https://github.com/fandangolas/mimir.git
+cd mimir
 
 cp .env.example .env
 # Edit .env with your Telegram bot token and user ID
@@ -141,7 +141,7 @@ All configuration is via environment variables (loaded from `.env` or system env
 
 Open **[http://localhost:3000](http://localhost:3000)** (login: `admin` / `admin`)
 
-**Pre-provisioned dashboard:** `Personal Assistant`
+**Pre-provisioned dashboard:** `Mimir`
 
 **Metrics tracked:**
 - Messages received, processed (success/error), unauthorized attempts
@@ -154,12 +154,12 @@ Open **[http://localhost:3000](http://localhost:3000)** (login: `admin` / `admin
 Query structured logs in **Grafana → Explore → Loki**:
 
 ```logql
-{job="personal-assistant"}
+{job="mimir"}
 ```
 
 Filter by correlation ID:
 ```logql
-{job="personal-assistant"} |= "123456-789"
+{job="mimir"} |= "123456-789"
 ```
 
 Logs include:
@@ -198,7 +198,7 @@ make lint
 ### Project Structure
 
 ```
-personal-assistant/
+mimir/
 ├── cmd/assistant/          # Main entry point
 ├── internal/
 │   ├── config/             # Configuration loading
@@ -232,6 +232,16 @@ Only Telegram users listed in `ALLOWED_USER_IDS` can send messages. Unauthorized
 - No data sent to external LLM providers
 - OAuth tokens (future: Google Calendar/Drive) encrypted at rest
 - No personal data in logs (only correlation IDs)
+
+---
+
+## Why "Mimir"?
+
+In Norse mythology, [Mimir](https://en.wikipedia.org/wiki/M%C3%ADmir) was renowned for his knowledge and wisdom. He advised Odin, the Allfather, serving as a counselor and source of insight.
+
+In *God of War* (2018), Mimir is portrayed as Kratos's companion — a disembodied head carried everywhere, offering guidance, lore, and witty commentary. This project channels that spirit: a personal, ever-present advisor who's always ready with an answer.
+
+Unlike cloud AI assistants, Mimir stays with you, runs locally, and never shares your conversations with anyone.
 
 ---
 
@@ -303,4 +313,5 @@ Built with:
 - [Loki](https://grafana.com/oss/loki/) — Log aggregation
 - [pgvector](https://github.com/pgvector/pgvector) — PostgreSQL vector extension (future RAG)
 
-Inspired by the local-first and privacy-first software movement.
+Inspired by the local-first and privacy-first software movement, and by Mimir's wisdom in Norse mythology.
+

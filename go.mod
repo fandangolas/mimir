@@ -1,4 +1,4 @@
-module github.com/fandangolas/personal-assistant
+module github.com/fandangolas/mimir
 
 go 1.24.3
 

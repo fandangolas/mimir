@@ -8,10 +8,10 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/fandangolas/personal-assistant/internal/llm"
-	"github.com/fandangolas/personal-assistant/internal/observability"
-	"github.com/fandangolas/personal-assistant/internal/store"
-	"github.com/fandangolas/personal-assistant/internal/telegram"
+	"github.com/fandangolas/mimir/internal/llm"
+	"github.com/fandangolas/mimir/internal/observability"
+	"github.com/fandangolas/mimir/internal/store"
+	"github.com/fandangolas/mimir/internal/telegram"
 )
 
 // Orchestrator coordinates the full message lifecycle:

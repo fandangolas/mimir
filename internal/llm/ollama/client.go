@@ -10,7 +10,7 @@ import (
 
 	"github.com/sony/gobreaker/v2"
 
-	"github.com/fandangolas/personal-assistant/internal/llm"
+	"github.com/fandangolas/mimir/internal/llm"
 )
 
 // toolCapableModels lists model name prefixes known to support native tool calling.
