@@ -7,7 +7,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Go-1.24.3-00ADD8?logo=go" alt="Go Version">
   <img src="https://img.shields.io/badge/PostgreSQL-17-336791?logo=postgresql" alt="PostgreSQL">
-  <img src="https://img.shields.io/badge/License-Private-lightgrey" alt="License">
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License">
 </p>
 
 ---
@@ -36,7 +36,7 @@ Mimir is a **privacy-first conversational AI** that runs entirely on your machin
          │ Long Polling (HTTPS)
          ↓
 ┌────────────────────────────────┐
-│   Mimir (Go)      │
+│   Mimir (Go)                   │
 │  ┌──────────────────────────┐  │
 │  │ Telegram Poller          │  │
 │  │ Orchestrator             │  │
@@ -300,7 +300,8 @@ This is a personal project, but suggestions are welcome via GitHub Issues.
 
 ## License
 
-Private project. Not licensed for public use or redistribution.
+This project is licensed under the MIT License.  
+You are free to use, modify, and distribute this software in accordance with the terms of the license.
 
 ---
 
