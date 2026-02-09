@@ -37,6 +37,46 @@ var (
 		Name: "assistant_telegram_send_errors_total",
 		Help: "Total number of errors sending Telegram messages.",
 	})
+
+	// RAG metrics
+	RAGSearches = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "mimir_rag_searches_total",
+		Help: "Total number of RAG searches performed, by status (success|error|fallback).",
+	}, []string{"status"})
+
+	RAGSearchDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "mimir_rag_search_duration_seconds",
+		Help:    "RAG hybrid search latency in seconds.",
+		Buckets: []float64{0.01, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0},
+	})
+
+	RAGRetrievedMessages = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "mimir_rag_retrieved_messages",
+		Help:    "Number of messages retrieved by RAG search.",
+		Buckets: []float64{0, 1, 2, 3, 5, 10, 15, 20},
+	})
+
+	RAGContextTokens = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "mimir_rag_context_tokens",
+		Help:    "Estimated tokens in RAG-assembled context.",
+		Buckets: []float64{100, 500, 1000, 2000, 4000, 6000, 8000},
+	})
+
+	EmbeddingsGenerated = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "mimir_embeddings_generated_total",
+		Help: "Total number of embeddings generated successfully.",
+	})
+
+	EmbeddingDuration = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name:    "mimir_embedding_generation_duration_seconds",
+		Help:    "Embedding generation latency in seconds.",
+		Buckets: []float64{0.1, 0.2, 0.5, 1.0, 2.0, 5.0},
+	})
+
+	EmbeddingErrors = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "mimir_embedding_errors_total",
+		Help: "Total number of embedding generation errors.",
+	})
 )
 
 // StartMetricsServer starts the Prometheus /metrics HTTP server on the given

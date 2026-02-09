@@ -40,6 +40,11 @@ func (db *DB) Close() {
 	db.pool.Close()
 }
 
+// Pool returns the underlying connection pool for advanced operations.
+func (db *DB) Pool() *pgxpool.Pool {
+	return db.pool
+}
+
 func (db *DB) migrate(ctx context.Context) error {
 	entries, err := migrationsFS.ReadDir("migrations")
 	if err != nil {

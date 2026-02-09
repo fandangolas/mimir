@@ -10,6 +10,7 @@ import (
 
 	"github.com/fandangolas/mimir/internal/llm"
 	"github.com/fandangolas/mimir/internal/observability"
+	"github.com/fandangolas/mimir/internal/rag"
 	"github.com/fandangolas/mimir/internal/store"
 	"github.com/fandangolas/mimir/internal/telegram"
 )
@@ -21,6 +22,7 @@ type Orchestrator struct {
 	chat               llm.ChatProvider
 	db                 *store.DB
 	conversationWindow int
+	ragPipeline        *rag.Pipeline // Optional RAG pipeline (nil if disabled)
 }
 
 // New creates a new Orchestrator.
@@ -30,7 +32,14 @@ func New(tg *telegram.Client, chat llm.ChatProvider, db *store.DB, conversationW
 		chat:               chat,
 		db:                 db,
 		conversationWindow: conversationWindow,
+		ragPipeline:        nil,
 	}
+}
+
+// WithRAG adds RAG pipeline support to the orchestrator.
+func (o *Orchestrator) WithRAG(ragPipeline *rag.Pipeline) *Orchestrator {
+	o.ragPipeline = ragPipeline
+	return o
 }
 
 // Handle processes a single incoming Telegram message.
@@ -53,24 +62,51 @@ func (o *Orchestrator) Handle(ctx context.Context, msg telegram.IncomingMessage)
 		return
 	}
 
-	if err := o.db.SaveMessage(ctx, sessionID, "user", msg.Text); err != nil {
-		log.Error("failed to save user message", "error", err)
-	}
+	// Use RAG pipeline if available, otherwise use traditional approach
+	var llmMessages []llm.Message
+	var reply string
 
-	history, err := o.db.GetRecentMessages(ctx, sessionID, o.conversationWindow)
-	if err != nil {
-		log.Error("failed to retrieve conversation history", "error", err)
-		observability.MessagesProcessed.WithLabelValues("error").Inc()
-		_ = o.tg.Send(msg.ChatID, "Sorry, I'm having trouble right now. Please try again.")
-		return
-	}
+	if o.ragPipeline != nil && o.ragPipeline.IsEnabled() {
+		log.Info("using RAG pipeline for context")
 
-	llmMessages := buildMessages(history)
+		// RAG pipeline handles message saving with embeddings
+		_, err := o.ragPipeline.StoreMessageWithEmbedding(ctx, sessionID, "user", msg.Text)
+		if err != nil {
+			log.Error("failed to save user message with RAG", "error", err)
+		}
+
+		// Build context with RAG
+		llmMessages, err = o.ragPipeline.BuildContextWithRAG(ctx, sessionID, msg.Text)
+		if err != nil {
+			log.Error("failed to build RAG context", "error", err)
+			observability.MessagesProcessed.WithLabelValues("error").Inc()
+			_ = o.tg.Send(msg.ChatID, "Sorry, I'm having trouble right now. Please try again.")
+			return
+		}
+	} else {
+		log.Info("using traditional context (RAG disabled)")
+
+		// Traditional: save message without embeddings
+		if err := o.db.SaveMessage(ctx, sessionID, "user", msg.Text); err != nil {
+			log.Error("failed to save user message", "error", err)
+		}
+
+		// Traditional: build context from recent messages
+		history, err := o.db.GetRecentMessages(ctx, sessionID, o.conversationWindow)
+		if err != nil {
+			log.Error("failed to retrieve conversation history", "error", err)
+			observability.MessagesProcessed.WithLabelValues("error").Inc()
+			_ = o.tg.Send(msg.ChatID, "Sorry, I'm having trouble right now. Please try again.")
+			return
+		}
+
+		llmMessages = buildMessages(history)
+	}
 
 	log.Info("calling LLM", "messages", len(llmMessages))
 
 	start := time.Now()
-	reply, err := o.chat.Chat(ctx, llmMessages)
+	reply, err = o.chat.Chat(ctx, llmMessages)
 	observability.LLMLatency.Observe(time.Since(start).Seconds())
 
 	if err != nil {
@@ -80,8 +116,16 @@ func (o *Orchestrator) Handle(ctx context.Context, msg telegram.IncomingMessage)
 		return
 	}
 
-	if err := o.db.SaveMessage(ctx, sessionID, "assistant", reply); err != nil {
-		log.Error("failed to save assistant message", "error", err)
+	// Save assistant reply (with embedding if RAG is enabled)
+	if o.ragPipeline != nil && o.ragPipeline.IsEnabled() {
+		_, err := o.ragPipeline.StoreMessageWithEmbedding(ctx, sessionID, "assistant", reply)
+		if err != nil {
+			log.Error("failed to save assistant message with RAG", "error", err)
+		}
+	} else {
+		if err := o.db.SaveMessage(ctx, sessionID, "assistant", reply); err != nil {
+			log.Error("failed to save assistant message", "error", err)
+		}
 	}
 
 	if err := o.tg.Send(msg.ChatID, reply); err != nil {

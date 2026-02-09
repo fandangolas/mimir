@@ -8,9 +8,11 @@ import (
 	"syscall"
 
 	"github.com/fandangolas/mimir/internal/config"
+	"github.com/fandangolas/mimir/internal/embeddings"
 	"github.com/fandangolas/mimir/internal/llm/ollama"
 	"github.com/fandangolas/mimir/internal/observability"
 	"github.com/fandangolas/mimir/internal/orchestrator"
+	"github.com/fandangolas/mimir/internal/rag"
 	"github.com/fandangolas/mimir/internal/store"
 	"github.com/fandangolas/mimir/internal/telegram"
 )
@@ -82,6 +84,44 @@ func run(ctx context.Context, cfg *config.Config) error {
 
 	// Orchestrator
 	orch := orchestrator.New(tgClient, ollamaClient, db, cfg.ConversationWindow)
+
+	// RAG pipeline (if enabled)
+	if cfg.RAGEnabled {
+		slog.Info("RAG enabled, initializing pipeline",
+			"embedding_model", cfg.EmbeddingModel,
+			"retrieved_count", cfg.RAGRetrievedCount,
+			"recent_count", cfg.RAGRecentCount)
+
+		// Create embedder with retry logic
+		baseEmbedder := embeddings.NewOllamaEmbedder(cfg.OllamaBaseURL, cfg.EmbeddingModel)
+		embedder := embeddings.NewRetryEmbedder(baseEmbedder, 3, 1000000000) // 3 retries, 1s base delay
+
+		// Create RAG pipeline
+		ragPipeline := rag.NewPipeline(
+			embedder,
+			db.Pool(), // Expose pool via getter
+			db,
+			rag.PipelineConfig{
+				Enabled:        true,
+				RetrievedCount: cfg.RAGRetrievedCount,
+				RecentCount:    cfg.RAGRecentCount,
+				SearchConfig: rag.SearchConfig{
+					SemanticWeight:   cfg.RAGSemanticWeight,
+					KeywordWeight:    cfg.RAGKeywordWeight,
+					RecencyWeight:    cfg.RAGRecencyWeight,
+					MinSimilarity:    cfg.RAGMinSimilarity,
+					RecencyDecayDays: cfg.RAGRecencyDecayDays,
+				},
+			},
+		)
+
+		// Attach RAG to orchestrator
+		orch.WithRAG(ragPipeline)
+
+		slog.Info("RAG pipeline initialized successfully")
+	} else {
+		slog.Info("RAG disabled, using traditional conversation window")
+	}
 
 	// Start polling — blocks until ctx is cancelled
 	tgClient.Poll(ctx, cfg.AllowedUserIDs, orch.Handle)

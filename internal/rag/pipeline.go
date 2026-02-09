@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/fandangolas/mimir/internal/embeddings"
 	"github.com/fandangolas/mimir/internal/llm"
+	"github.com/fandangolas/mimir/internal/observability"
 	"github.com/fandangolas/mimir/internal/store"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -93,14 +95,20 @@ func (p *Pipeline) BuildContextWithRAG(
 
 	// 1. Generate query embedding
 	log.Debug("generating query embedding")
+	embStart := time.Now()
 	queryEmbedding, err := p.embedder.Embed(ctx, userQuery)
+	observability.EmbeddingDuration.Observe(time.Since(embStart).Seconds())
 	if err != nil {
+		observability.EmbeddingErrors.Inc()
+		observability.RAGSearches.WithLabelValues("fallback").Inc()
 		log.Warn("failed to generate query embedding, falling back to keyword search", "error", err)
 		return p.buildContextWithoutRAG(ctx, sessionID)
 	}
+	observability.EmbeddingsGenerated.Inc()
 
 	// 2. Perform hybrid search
 	log.Debug("performing hybrid search", "query", userQuery)
+	searchStart := time.Now()
 	retrieved, err := p.searcher.HybridSearch(
 		ctx,
 		sessionID,
@@ -108,11 +116,16 @@ func (p *Pipeline) BuildContextWithRAG(
 		userQuery,
 		p.retrievedCount,
 	)
+	observability.RAGSearchDuration.Observe(time.Since(searchStart).Seconds())
+
 	if err != nil {
+		observability.RAGSearches.WithLabelValues("error").Inc()
 		log.Warn("hybrid search failed, falling back to recent messages", "error", err)
 		return p.buildContextWithoutRAG(ctx, sessionID)
 	}
 
+	observability.RAGSearches.WithLabelValues("success").Inc()
+	observability.RAGRetrievedMessages.Observe(float64(len(retrieved)))
 	log.Debug("hybrid search complete", "retrieved_count", len(retrieved))
 
 	// 3. Get recent messages
@@ -137,6 +150,10 @@ func (p *Pipeline) BuildContextWithRAG(
 		recentMessages,
 		userQuery,
 	)
+
+	// Track context size
+	contextTokens := p.contextManager.EstimateTokens(contextText)
+	observability.RAGContextTokens.Observe(float64(contextTokens))
 
 	// Convert to LLM message format
 	messages := []llm.Message{
@@ -206,11 +223,17 @@ func (p *Pipeline) StoreMessageWithEmbedding(
 			bgCtx := context.Background()
 			log := slog.Default().With("message_id", messageID)
 
+			start := time.Now()
 			embedding, err := p.embedder.Embed(bgCtx, content)
+			observability.EmbeddingDuration.Observe(time.Since(start).Seconds())
+
 			if err != nil {
+				observability.EmbeddingErrors.Inc()
 				log.Error("failed to generate embedding", "error", err)
 				return
 			}
+
+			observability.EmbeddingsGenerated.Inc()
 
 			if err := p.db.SaveEmbedding(bgCtx, messageID, embedding); err != nil {
 				log.Error("failed to save embedding", "error", err)
