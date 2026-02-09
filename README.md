@@ -117,6 +117,77 @@ Open your bot on Telegram, send `/start`, and start chatting!
 
 ---
 
+## RAG: Long-Term Memory (Optional)
+
+By default, Mimir remembers only the last 20 messages. **RAG (Retrieval-Augmented Generation)** gives Mimir true long-term memory, allowing it to remember conversations from weeks, months, or even years ago.
+
+### How RAG Works
+
+RAG uses **embeddings** (numerical representations of text) to search your entire conversation history semantically:
+
+```
+You (3 months ago): "I'm allergic to peanuts"
+You (today): "Recommend a restaurant"
+Mimir (with RAG): "I'll suggest places with allergy-friendly menus since you have a peanut allergy" ✅
+```
+
+Without RAG, Mimir would have forgotten the allergy mention.
+
+### Enabling RAG
+
+**Step 1: Pull the embedding model**
+
+```bash
+ollama pull nomic-embed-text
+```
+
+**Step 2: Backfill existing messages** (if you have chat history)
+
+```bash
+make build
+./bin/backfill-embeddings
+```
+
+This generates embeddings for all existing messages. Progress is logged:
+```
+INFO starting backfill total_messages=1500
+INFO progress processed=100 total=1500 remaining=1400 percent=6.7%
+...
+INFO backfill summary total_messages=1500 processed=1500 errors=0 success_rate=100.0%
+```
+
+**Step 3: Enable RAG in .env**
+
+```bash
+RAG_ENABLED=true
+```
+
+**Step 4: Restart Mimir**
+
+```bash
+make run
+```
+
+New messages will automatically get embeddings generated in the background.
+
+### What RAG Gives You
+
+- 🧠 **Semantic search:** Finds conceptually similar conversations ("anxious" matches "worried", "stressed")
+- 📅 **Long-term memory:** Remembers facts from months/years ago
+- 🎯 **Hybrid search:** Combines semantic similarity + keyword matching + recency
+- ⚡ **Fast:** Sub-second search even with 10,000+ messages
+- 💾 **Efficient:** ~200 MB storage for 5 years of conversations
+
+### RAG Architecture
+
+See [docs/rag-architecture.md](docs/rag-architecture.md) for:
+- Complete technical architecture
+- Glossary explaining embeddings, vectors, hybrid search
+- Performance tuning guide
+- Storage and performance estimates
+
+---
+
 ## Configuration
 
 All configuration is via environment variables (loaded from `.env` or system environment):
@@ -133,6 +204,22 @@ All configuration is via environment variables (loaded from `.env` or system env
 | `CONVERSATION_WINDOW` | ❌ | `20` | Number of recent messages sent to LLM |
 | `METRICS_ADDR` | ❌ | `:9090` | Prometheus metrics endpoint |
 
+### RAG (Long-Term Memory) Configuration
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `RAG_ENABLED` | ❌ | `false` | Enable RAG for long-term conversational memory |
+| `EMBEDDING_MODEL` | ❌ | `nomic-embed-text` | Ollama embedding model (768 dimensions) |
+| `RAG_RETRIEVED_COUNT` | ❌ | `5` | Number of messages to retrieve from history |
+| `RAG_RECENT_COUNT` | ❌ | `10` | Number of recent messages to include |
+| `RAG_MIN_SIMILARITY` | ❌ | `0.5` | Minimum cosine similarity threshold (0-1) |
+| `RAG_WEIGHT_SEMANTIC` | ❌ | `0.5` | Semantic similarity weight in hybrid search |
+| `RAG_WEIGHT_KEYWORD` | ❌ | `0.3` | Keyword matching weight in hybrid search |
+| `RAG_WEIGHT_RECENCY` | ❌ | `0.2` | Recency boost weight in hybrid search |
+| `RAG_RECENCY_DECAY_DAYS` | ❌ | `30` | Days for recency score decay |
+
+**Note:** Weights must sum to 1.0. See [RAG Architecture](docs/rag-architecture.md) for details.
+
 ---
 
 ## Observability
@@ -148,6 +235,13 @@ Open **[http://localhost:3000](http://localhost:3000)** (login: `admin` / `admin
 - LLM latency (p50/p95/p99 + heatmap)
 - Telegram send errors
 - Message processing rate over time
+
+**RAG metrics (if enabled):**
+- RAG searches performed (success/error/fallback)
+- Hybrid search latency
+- Number of messages retrieved per query
+- Context token usage
+- Embedding generation latency and errors
 
 ### Logs
 
@@ -241,7 +335,7 @@ In Norse mythology, [Mimir](https://en.wikipedia.org/wiki/M%C3%ADmir) was renown
 
 In *God of War* (2018), Mimir is portrayed as Kratos's companion — a disembodied head carried everywhere, offering guidance, lore, and witty commentary. This project channels that spirit: a personal, ever-present advisor who's always ready with an answer.
 
-Unlike cloud AI assistants, Mimir stays with you, runs locally, and never shares your conversations with anyone.
+Unlike cloud AI assistants, Mimir stays with you, runs locally, and never shares your conversations with anyone. With RAG-powered long-term memory, Mimir truly remembers your conversations—making it a genuine personal assistant that grows wiser over time.
 
 ---
 
@@ -252,6 +346,12 @@ Unlike cloud AI assistants, Mimir stays with you, runs locally, and never shares
 - Full observability stack
 - User access control
 
+**Phase 2.5: ✅ Complete**
+- RAG (Retrieval-Augmented Generation) for long-term memory
+- Hybrid search (semantic + keyword + recency)
+- Embedding generation and backfill tools
+- pgvector integration with HNSW indexes
+
 **Phase 3: Pending**
 - Google Calendar integration via MCP
 - Google Drive RAG (document search)
@@ -261,7 +361,7 @@ Unlike cloud AI assistants, Mimir stays with you, runs locally, and never shares
 - Cloud deployment (VPS/AWS)
 - Automated backups
 
-See [docs/development-phases.md](docs/development-phases.md) for details.
+See [docs/development-phases.md](docs/development-phases.md) and [docs/rag-architecture.md](docs/rag-architecture.md) for details.
 
 ---
 
