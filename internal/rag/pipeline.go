@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/fandangolas/mimir/internal/embeddings"
@@ -143,25 +144,34 @@ func (p *Pipeline) BuildContextWithRAG(
 		"final_retrieved", len(retrieved),
 		"final_recent", len(recentMessages))
 
-	// 5. Build context
-	contextText := p.contextManager.BuildContext(
-		"You are Mimir, a helpful AI assistant. Use the provided conversation history to give contextually relevant and personalized responses.",
-		retrieved,
-		recentMessages,
-		userQuery,
-	)
+	// 5. Build context - separate system prompt from conversation
+	systemPrompt := p.buildSystemPrompt(retrieved, recentMessages)
 
 	// Track context size
-	contextTokens := p.contextManager.EstimateTokens(contextText)
+	contextTokens := p.contextManager.EstimateTokens(systemPrompt)
 	observability.RAGContextTokens.Observe(float64(contextTokens))
 
-	// Convert to LLM message format
+	// Build message list with proper structure
 	messages := []llm.Message{
 		{
 			Role:    llm.RoleSystem,
-			Content: contextText,
+			Content: systemPrompt,
 		},
 	}
+
+	// Add conversation history
+	for _, msg := range recentMessages {
+		messages = append(messages, llm.Message{
+			Role:    llm.Role(msg.Role),
+			Content: msg.Content,
+		})
+	}
+
+	// Add current user query as the final user message
+	messages = append(messages, llm.Message{
+		Role:    llm.RoleUser,
+		Content: userQuery,
+	})
 
 	return messages, nil
 }
@@ -246,6 +256,27 @@ func (p *Pipeline) StoreMessageWithEmbedding(
 	}
 
 	return messageID, nil
+}
+
+// buildSystemPrompt creates a system prompt with RAG context.
+func (p *Pipeline) buildSystemPrompt(retrieved []SearchResult, recent []store.Message) string {
+	var b strings.Builder
+
+	b.WriteString("You are Mimir, a helpful AI assistant. Use the provided conversation history to give contextually relevant and personalized responses.")
+
+	// Add retrieved context if available
+	retrieved = p.contextManager.deduplicateMessages(recent, retrieved)
+	if len(retrieved) > 0 {
+		b.WriteString("\n\n## Relevant conversation history:\n\n")
+		for _, msg := range retrieved {
+			b.WriteString(fmt.Sprintf("[%s] %s: %s\n",
+				msg.CreatedAt.Format("Jan 02 15:04"),
+				msg.Role,
+				msg.Content))
+		}
+	}
+
+	return b.String()
 }
 
 // IsEnabled returns whether RAG is enabled.
