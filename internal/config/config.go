@@ -20,6 +20,17 @@ type Config struct {
 	ConversationWindow int
 	MetricsAddr        string
 	AllowedUserIDs     map[int64]struct{}
+
+	// RAG configuration
+	RAGEnabled          bool
+	EmbeddingModel      string
+	RAGRetrievedCount   int
+	RAGRecentCount      int
+	RAGMinSimilarity    float64
+	RAGSemanticWeight   float64
+	RAGKeywordWeight    float64
+	RAGRecencyWeight    float64
+	RAGRecencyDecayDays float64
 }
 
 // Load reads configuration from environment variables.
@@ -43,6 +54,17 @@ func Load() (*Config, error) {
 		ConversationWindow: getEnvIntOrDefault("CONVERSATION_WINDOW", 20),
 		MetricsAddr:        getEnvOrDefault("METRICS_ADDR", ":9090"),
 		AllowedUserIDs:     allowedUserIDs,
+
+		// RAG configuration
+		RAGEnabled:          getEnvBoolOrDefault("RAG_ENABLED", false),
+		EmbeddingModel:      getEnvOrDefault("EMBEDDING_MODEL", "nomic-embed-text"),
+		RAGRetrievedCount:   getEnvIntOrDefault("RAG_RETRIEVED_COUNT", 5),
+		RAGRecentCount:      getEnvIntOrDefault("RAG_RECENT_COUNT", 10),
+		RAGMinSimilarity:    getEnvFloatOrDefault("RAG_MIN_SIMILARITY", 0.5),
+		RAGSemanticWeight:   getEnvFloatOrDefault("RAG_WEIGHT_SEMANTIC", 0.5),
+		RAGKeywordWeight:    getEnvFloatOrDefault("RAG_WEIGHT_KEYWORD", 0.3),
+		RAGRecencyWeight:    getEnvFloatOrDefault("RAG_WEIGHT_RECENCY", 0.2),
+		RAGRecencyDecayDays: getEnvFloatOrDefault("RAG_RECENCY_DECAY_DAYS", 30.0),
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -98,4 +120,28 @@ func getEnvIntOrDefault(key string, defaultVal int) int {
 		return defaultVal
 	}
 	return n
+}
+
+func getEnvFloatOrDefault(key string, defaultVal float64) float64 {
+	v := os.Getenv(key)
+	if v == "" {
+		return defaultVal
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return defaultVal
+	}
+	return f
+}
+
+func getEnvBoolOrDefault(key string, defaultVal bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return defaultVal
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return defaultVal
+	}
+	return b
 }
