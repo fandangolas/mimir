@@ -218,7 +218,7 @@ func (p *Pipeline) StoreMessageWithEmbedding(
 	messageID := messages[0].ID
 
 	// Generate embedding asynchronously (don't block)
-	if p.enabled {
+	if p.enabled && content != "" {
 		go func() {
 			bgCtx := context.Background()
 			log := slog.Default().With("message_id", messageID)
@@ -241,6 +241,8 @@ func (p *Pipeline) StoreMessageWithEmbedding(
 				log.Debug("embedding saved successfully")
 			}
 		}()
+	} else if content == "" {
+		slog.Default().With("message_id", messageID).Warn("skipping embedding for empty message")
 	}
 
 	return messageID, nil
