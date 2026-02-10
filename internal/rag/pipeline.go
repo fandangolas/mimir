@@ -262,7 +262,7 @@ func (p *Pipeline) StoreMessageWithEmbedding(
 func (p *Pipeline) buildSystemPrompt(retrieved []SearchResult, recent []store.Message) string {
 	var b strings.Builder
 
-	b.WriteString("You are Mimir, a helpful AI assistant. Use the provided conversation history to give contextually relevant and personalized responses.")
+	b.WriteString("You are Mimir, a helpful AI assistant. You have access to function calling capabilities - when you need to access calendar data, you MUST use the provided tools by making function calls, not by describing what you would do. Use the provided conversation history to give contextually relevant and personalized responses.")
 
 	// Add retrieved context if available
 	retrieved = p.contextManager.deduplicateMessages(recent, retrieved)

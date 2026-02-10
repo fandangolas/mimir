@@ -10,6 +10,7 @@ import (
 	"github.com/fandangolas/mimir/internal/config"
 	"github.com/fandangolas/mimir/internal/embeddings"
 	"github.com/fandangolas/mimir/internal/llm/ollama"
+	"github.com/fandangolas/mimir/internal/mcpmanager"
 	"github.com/fandangolas/mimir/internal/observability"
 	"github.com/fandangolas/mimir/internal/orchestrator"
 	"github.com/fandangolas/mimir/internal/rag"
@@ -121,6 +122,34 @@ func run(ctx context.Context, cfg *config.Config) error {
 		slog.Info("RAG pipeline initialized successfully")
 	} else {
 		slog.Info("RAG disabled, using traditional conversation window")
+	}
+
+	// MCP manager (if enabled)
+	if cfg.MCPEnabled {
+		slog.Info("MCP enabled, initializing manager")
+
+		mcpMgr := mcpmanager.NewManager(mcpmanager.Config{
+			Enabled:                cfg.MCPEnabled,
+			GoogleOAuthCredentials: cfg.GoogleOAuthCredentials,
+			GoogleCalendarTokens:   cfg.GoogleCalendarMCPTokens,
+		})
+
+		// Start MCP clients
+		if err := mcpMgr.Start(ctx, mcpmanager.Config{
+			Enabled:                cfg.MCPEnabled,
+			GoogleOAuthCredentials: cfg.GoogleOAuthCredentials,
+			GoogleCalendarTokens:   cfg.GoogleCalendarMCPTokens,
+		}); err != nil {
+			return err
+		}
+		defer mcpMgr.Close()
+
+		// Attach MCP to orchestrator
+		orch.WithMCP(mcpMgr)
+
+		slog.Info("MCP manager initialized successfully")
+	} else {
+		slog.Info("MCP disabled")
 	}
 
 	// Start polling — blocks until ctx is cancelled

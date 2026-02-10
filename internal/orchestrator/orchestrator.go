@@ -3,12 +3,14 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/fandangolas/mimir/internal/llm"
+	"github.com/fandangolas/mimir/internal/mcpmanager"
 	"github.com/fandangolas/mimir/internal/observability"
 	"github.com/fandangolas/mimir/internal/rag"
 	"github.com/fandangolas/mimir/internal/store"
@@ -22,7 +24,8 @@ type Orchestrator struct {
 	chat               llm.ChatProvider
 	db                 *store.DB
 	conversationWindow int
-	ragPipeline        *rag.Pipeline // Optional RAG pipeline (nil if disabled)
+	ragPipeline        *rag.Pipeline        // Optional RAG pipeline (nil if disabled)
+	mcpManager         *mcpmanager.Manager  // Optional MCP manager (nil if disabled)
 }
 
 // New creates a new Orchestrator.
@@ -39,6 +42,12 @@ func New(tg *telegram.Client, chat llm.ChatProvider, db *store.DB, conversationW
 // WithRAG adds RAG pipeline support to the orchestrator.
 func (o *Orchestrator) WithRAG(ragPipeline *rag.Pipeline) *Orchestrator {
 	o.ragPipeline = ragPipeline
+	return o
+}
+
+// WithMCP adds MCP manager support to the orchestrator.
+func (o *Orchestrator) WithMCP(mcpManager *mcpmanager.Manager) *Orchestrator {
+	o.mcpManager = mcpManager
 	return o
 }
 
@@ -106,7 +115,21 @@ func (o *Orchestrator) Handle(ctx context.Context, msg telegram.IncomingMessage)
 	log.Info("calling LLM", "messages", len(llmMessages))
 
 	start := time.Now()
-	reply, err = o.chat.Chat(ctx, llmMessages)
+
+	// Check if MCP tools are available
+	var tools []llm.Tool
+	if o.mcpManager != nil && o.mcpManager.IsEnabled() {
+		tools = o.mcpManager.GetLLMTools()
+		log.Info("tools available", "count", len(tools))
+	}
+
+	// Call LLM with tools if available
+	if len(tools) > 0 {
+		reply, err = o.handleWithTools(ctx, llmMessages, tools, log)
+	} else {
+		reply, err = o.chat.Chat(ctx, llmMessages)
+	}
+
 	observability.LLMLatency.Observe(time.Since(start).Seconds())
 
 	if err != nil {
@@ -143,7 +166,7 @@ func buildMessages(history []store.Message) []llm.Message {
 
 	msgs = append(msgs, llm.Message{
 		Role:    llm.RoleSystem,
-		Content: "You are a helpful personal assistant. Be concise and direct.",
+		Content: "You are Mimir, a helpful personal assistant. You have function calling capabilities - when you need calendar information, you MUST call the appropriate function, not describe what you would do. Be concise and direct.",
 	})
 
 	for _, m := range history {
@@ -154,4 +177,51 @@ func buildMessages(history []store.Message) []llm.Message {
 	}
 
 	return msgs
+}
+
+// handleWithTools processes LLM responses that may include tool calls.
+func (o *Orchestrator) handleWithTools(ctx context.Context, messages []llm.Message, tools []llm.Tool, log *slog.Logger) (string, error) {
+	const maxToolRounds = 5 // Prevent infinite loops
+
+	for round := 0; round < maxToolRounds; round++ {
+		// Call LLM with tools
+		response, err := o.chat.ChatWithTools(ctx, messages, tools)
+		if err != nil {
+			return "", err
+		}
+
+		// If no tool calls, return the response
+		if len(response.ToolCalls) == 0 {
+			return response.Content, nil
+		}
+
+		log.Info("tool calls requested", "count", len(response.ToolCalls), "round", round+1)
+
+		// Add assistant's tool call message to conversation
+		messages = append(messages, *response)
+
+		// Execute each tool call
+		for _, toolCall := range response.ToolCalls {
+			log.Info("executing tool", "name", toolCall.Function.Name, "id", toolCall.ID)
+
+			result, err := o.mcpManager.ExecuteToolCall(ctx, toolCall)
+			if err != nil {
+				log.Error("tool execution failed", "tool", toolCall.Function.Name, "error", err)
+				result = fmt.Sprintf("Error: %v", err)
+			}
+
+			// Add tool result to conversation
+			messages = append(messages, llm.Message{
+				Role:       llm.RoleTool,
+				Content:    result,
+				ToolCallID: toolCall.ID,
+			})
+
+			log.Debug("tool result", "tool", toolCall.Function.Name, "result_length", len(result))
+		}
+
+		// Continue loop - LLM will process tool results and either respond or call more tools
+	}
+
+	return "", fmt.Errorf("exceeded maximum tool calling rounds (%d)", maxToolRounds)
 }

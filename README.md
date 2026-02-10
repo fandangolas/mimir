@@ -188,6 +188,30 @@ See [docs/rag-architecture.md](docs/rag-architecture.md) for:
 
 ---
 
+## Google Calendar Integration (Optional)
+
+Mimir can integrate with your Google Calendar via the Model Context Protocol (MCP), allowing it to:
+- View and search calendar events
+- Create new events
+- Check free/busy availability
+- Provide time-aware responses
+
+**Setup:** See [docs/google-calendar-setup.md](docs/google-calendar-setup.md) for complete instructions.
+
+**Quick start:**
+1. Create Google Cloud project and OAuth credentials
+2. Enable MCP in `.env`:
+   ```bash
+   MCP_ENABLED=true
+   GOOGLE_OAUTH_CREDENTIALS=/path/to/gcp-oauth.keys.json
+   ```
+3. Start Mimir and complete OAuth flow
+4. Ask: "What's on my calendar today?"
+
+All calendar data stays local. No external LLM providers see your calendar.
+
+---
+
 ## Configuration
 
 All configuration is via environment variables (loaded from `.env` or system environment):
@@ -352,8 +376,8 @@ Unlike cloud AI assistants, Mimir stays with you, runs locally, and never shares
 - Embedding generation and backfill tools
 - pgvector integration with HNSW indexes
 
-**Phase 3: Pending**
-- Google Calendar integration via MCP
+**Phase 3: 🚧 In Progress**
+- ✅ Google Calendar integration via MCP - [Setup Guide](docs/google-calendar-setup.md)
 - Google Drive RAG (document search)
 - Scheduled reminders
 

@@ -3,3 +3,4 @@ bin/
 *.local
 logs/
 CLAUDE.md
+gcp-oauth.keys.json

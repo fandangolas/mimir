@@ -31,6 +31,11 @@ type Config struct {
 	RAGKeywordWeight    float64
 	RAGRecencyWeight    float64
 	RAGRecencyDecayDays float64
+
+	// MCP configuration
+	MCPEnabled              bool
+	GoogleOAuthCredentials  string
+	GoogleCalendarMCPTokens string
 }
 
 // Load reads configuration from environment variables.
@@ -65,6 +70,11 @@ func Load() (*Config, error) {
 		RAGKeywordWeight:    getEnvFloatOrDefault("RAG_WEIGHT_KEYWORD", 0.3),
 		RAGRecencyWeight:    getEnvFloatOrDefault("RAG_WEIGHT_RECENCY", 0.2),
 		RAGRecencyDecayDays: getEnvFloatOrDefault("RAG_RECENCY_DECAY_DAYS", 30.0),
+
+		// MCP configuration
+		MCPEnabled:              getEnvBoolOrDefault("MCP_ENABLED", false),
+		GoogleOAuthCredentials:  os.Getenv("GOOGLE_OAUTH_CREDENTIALS"),
+		GoogleCalendarMCPTokens: getEnvOrDefault("GOOGLE_CALENDAR_MCP_TOKEN_PATH", ""),
 	}
 
 	if err := cfg.validate(); err != nil {

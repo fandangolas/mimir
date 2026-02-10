@@ -59,12 +59,27 @@ func New(baseURL, model string) *Client {
 type chatRequest struct {
 	Model    string       `json:"model"`
 	Messages []ollamaMsg  `json:"messages"`
+	Tools    []llm.Tool   `json:"tools,omitempty"`
 	Stream   bool         `json:"stream"`
 }
 
 type ollamaMsg struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string          `json:"role"`
+	Content    string          `json:"content"`
+	ToolCalls  []ollamaToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string          `json:"tool_call_id,omitempty"`
+}
+
+// ollamaToolCall is Ollama's format for tool calls
+type ollamaToolCall struct {
+	Function ollamaFunctionCall `json:"function"`
+}
+
+// ollamaFunctionCall contains the function details from Ollama
+type ollamaFunctionCall struct {
+	Index     int             `json:"index,omitempty"`
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
 }
 
 type chatResponse struct {
@@ -87,7 +102,24 @@ func (c *Client) Chat(ctx context.Context, messages []llm.Message) (string, erro
 func (c *Client) doChat(ctx context.Context, messages []llm.Message) (string, error) {
 	msgs := make([]ollamaMsg, len(messages))
 	for i, m := range messages {
-		msgs[i] = ollamaMsg{Role: string(m.Role), Content: m.Content}
+		// Convert standard tool calls to Ollama format
+		var ollamaToolCalls []ollamaToolCall
+		for idx, tc := range m.ToolCalls {
+			ollamaToolCalls = append(ollamaToolCalls, ollamaToolCall{
+				Function: ollamaFunctionCall{
+					Index:     idx,
+					Name:      tc.Function.Name,
+					Arguments: tc.Function.Arguments,
+				},
+			})
+		}
+
+		msgs[i] = ollamaMsg{
+			Role:       string(m.Role),
+			Content:    m.Content,
+			ToolCalls:  ollamaToolCalls,
+			ToolCallID: m.ToolCallID,
+		}
 	}
 
 	body, err := json.Marshal(chatRequest{
@@ -125,6 +157,96 @@ func (c *Client) doChat(ctx context.Context, messages []llm.Message) (string, er
 	}
 
 	return cr.Message.Content, nil
+}
+
+// ChatWithTools sends messages with available tools and returns the full response.
+func (c *Client) ChatWithTools(ctx context.Context, messages []llm.Message, tools []llm.Tool) (*llm.Message, error) {
+	msgs := make([]ollamaMsg, len(messages))
+	for i, m := range messages {
+		// Convert standard tool calls to Ollama format
+		var ollamaToolCalls []ollamaToolCall
+		for idx, tc := range m.ToolCalls {
+			ollamaToolCalls = append(ollamaToolCalls, ollamaToolCall{
+				Function: ollamaFunctionCall{
+					Index:     idx,
+					Name:      tc.Function.Name,
+					Arguments: tc.Function.Arguments,
+				},
+			})
+		}
+
+		msgs[i] = ollamaMsg{
+			Role:       string(m.Role),
+			Content:    m.Content,
+			ToolCalls:  ollamaToolCalls,
+			ToolCallID: m.ToolCallID,
+		}
+	}
+
+	body, err := json.Marshal(chatRequest{
+		Model:    c.model,
+		Messages: msgs,
+		Tools:    tools,
+		Stream:   false,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshalling chat request: %w", err)
+	}
+
+	// Debug logging disabled in production
+	// Uncomment for debugging:
+	// fmt.Printf("DEBUG Ollama request (len=%d): tools=%d\n", len(body), len(tools))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/chat", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("calling ollama: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ollama returned status %d", resp.StatusCode)
+	}
+
+	var cr chatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&cr); err != nil {
+		return nil, fmt.Errorf("decoding ollama response: %w", err)
+	}
+
+	if cr.Error != "" {
+		return nil, fmt.Errorf("ollama error: %s", cr.Error)
+	}
+
+	// Debug: Check what we got back
+	fmt.Printf("DEBUG Response: role=%s content_len=%d tool_calls=%d\n",
+		cr.Message.Role, len(cr.Message.Content), len(cr.Message.ToolCalls))
+	if len(cr.Message.ToolCalls) > 0 {
+		fmt.Printf("DEBUG First tool call: %+v\n", cr.Message.ToolCalls[0])
+	}
+
+	// Convert Ollama tool calls to standard format
+	var toolCalls []llm.ToolCall
+	for _, otc := range cr.Message.ToolCalls {
+		toolCalls = append(toolCalls, llm.ToolCall{
+			ID:   fmt.Sprintf("call_%d", otc.Function.Index),
+			Type: "function",
+			Function: llm.FunctionCall{
+				Name:      otc.Function.Name,
+				Arguments: otc.Function.Arguments,
+			},
+		})
+	}
+
+	return &llm.Message{
+		Role:      llm.Role(cr.Message.Role),
+		Content:   cr.Message.Content,
+		ToolCalls: toolCalls,
+	}, nil
 }
 
 // SupportsToolCalling checks whether the configured model is known to support

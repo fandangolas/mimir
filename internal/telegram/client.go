@@ -37,10 +37,17 @@ func New(token string) (*Client, error) {
 // Send sends a plain text message to the given chat ID.
 func (c *Client) Send(chatID int64, text string) error {
 	msg := tgbotapi.NewMessage(chatID, text)
+	// Try with Markdown first, fall back to plain text on parse error
 	msg.ParseMode = tgbotapi.ModeMarkdown
 
 	_, err := c.breaker.Execute(func() (tgbotapi.Message, error) {
-		return c.bot.Send(msg)
+		sent, err := c.bot.Send(msg)
+		if err != nil {
+			// If markdown parsing failed, retry without formatting
+			msg.ParseMode = ""
+			return c.bot.Send(msg)
+		}
+		return sent, nil
 	})
 	if err != nil {
 		return fmt.Errorf("sending telegram message to %d: %w", chatID, err)
